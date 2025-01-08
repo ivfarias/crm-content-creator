@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { getRSSFeeds, addRSSFeed, deleteRSSFeed, RSSFeed } from '../lib/db'
+import { Trash2 } from 'lucide-react'
 
 export default function RSSFeedManager() {
     const [feeds, setFeeds] = useState<RSSFeed[]>([])
@@ -59,28 +60,29 @@ export default function RSSFeedManager() {
                             id="feed-url"
                             value={newFeedUrl}
                             onChange={(e) => setNewFeedUrl(e.target.value)}
-                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-l-md focus:ring-gray-500 focus:border-gray-500 sm:text-sm border-gray-300"
+                            className="flex-1 min-w-0 block w-full px-3 py-2 rounded-none rounded-l-md focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm border-gray-300"
                             placeholder="https://example.com/rss"
                             required
                         />
                         <button
                             type="submit"
-                            className="inline-flex items-center px-3 py-2 border border-l-0 border-emerald-300 rounded-r-md bg-emerald-500 text-white text-sm"
+                            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-r-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                         >
                             Add Feed
                         </button>
                     </div>
                 </div>
             </form>
-            {message && <p className="text-sm text-emerald-600">{message}</p>}
+            {message && <p className="text-sm text-green-600">{message}</p>}
             <ul className="divide-y divide-gray-200">
                 {feeds.map((feed) => (
                     <li key={feed.id} className="py-4 flex justify-between items-center">
-                        <span className="text-sm font-medium text-gray-700">{feed.url}</span>
+                        <span className="text-sm font-medium text-gray-900">{feed.url}</span>
                         <button
                             onClick={() => handleDelete(feed.id)}
-                            className="ml-2 inline-flex items-center px-2.5 py-1.5 border border-transparent text-xs font-medium rounded text-red-700 bg-red-100 hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            className="ml-2 inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                         >
+                            <Trash2 className="h-4 w-4 mr-1" />
                             Delete
                         </button>
                     </li>
