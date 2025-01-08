@@ -5,6 +5,7 @@ import { getRSSFeeds, addSummary } from '../../../lib/db'
 import { getStoredPrompt } from '../../../lib/promptStorage'
 import axios from 'axios'
 import * as cheerio from 'cheerio'
+import { ChatCompletionCreateParams } from 'openai/resources/chat/completions'
 
 const parser = new Parser({
   customFields: {
@@ -19,8 +20,8 @@ const openai = new OpenAI({
 const MAX_TOKENS = 500
 const MAX_RETRIES = 5
 const RETRY_DELAY = 5000 // 5 seconds
-const FETCH_TIMEOUT = 120000 // 120 seconds (2 minutes)
-const PROCESSING_TIMEOUT = 240000 // 240 seconds (4 minutes)
+const FETCH_TIMEOUT = 60000 // 60 seconds
+const PROCESSING_TIMEOUT = 60000 // 60 seconds
 
 async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<string> {
   try {
@@ -76,7 +77,18 @@ async function getAIPrompt(): Promise<string> {
 
 function cleanHtmlContent(content: string): string {
   const $ = cheerio.load(content)
-  return $.text().trim()
+  // Remove script and style elements
+  $('script, style').remove()
+  $('span').remove()
+
+  // Replace <br> tags with newlines
+  $('br').replaceWith('\n')
+  // Replace other block-level elements with two newlines
+  $('div, p, h1, h2, h3, h4, h5, h6').each((_, elem) => {
+    $(elem).replaceWith('\n\n' + $(elem).text().trim() + '\n\n')
+  })
+  // Get the text and trim whitespace
+  return $.text().replace(/\s+/g, ' ').trim()
 }
 
 async function processFeed(feed: { url: string }, aiPrompt: string, maxArticles: number): Promise<Array<{ title: string; link: string; summary: string }>> {
@@ -101,42 +113,59 @@ async function processFeed(feed: { url: string }, aiPrompt: string, maxArticles:
         continue
       }
 
-      const articleContent = await fetchArticleContent(item.link)
+      try {
+        const articleContent = await fetchArticleContent(item.link)
 
-      if (!articleContent) {
-        console.log('Skipping item with no content:', item.title)
-        continue
-      }
+        if (!articleContent) {
+          console.log('Skipping item with no content:', item.title)
+          continue
+        }
 
-      const cleanTitle = cleanHtmlContent(item.title || 'Untitled')
-      const cleanContent = cleanHtmlContent(articleContent)
+        const cleanTitle = cleanHtmlContent(item.title || 'Untitled')
+        const cleanContent = cleanHtmlContent(articleContent)
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-3.5-turbo",
-        messages: [
-          { role: "system", content: "You are a helpful assistant that summarizes articles." },
-          {
-            role: "user", content: `${aiPrompt}
+        console.log('Sending request to OpenAI API')
+        const response = await Promise.race([
+          openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: "You are a helpful assistant that summarizes articles." },
+              { role: "user", content: `${aiPrompt}\n\nTitle: ${cleanTitle}\nContent: ${cleanContent}` }
+            ],
+            max_tokens: MAX_TOKENS,
+            temperature: 0.7,
+          } as ChatCompletionCreateParams),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('OpenAI API timeout')), 30000)) // 30 second timeout
+        ]);
 
-Title: ${cleanTitle}
-Content: ${cleanContent}`
+        console.log('Received response from OpenAI API')
+
+        if ('choices' in response && Array.isArray(response.choices) && response.choices.length > 0) {
+          const firstChoice = response.choices[0];
+          if ('message' in firstChoice && firstChoice.message) {
+            const summary = firstChoice.message.content?.trim()
+
+            if (summary) {
+              await addSummary(cleanTitle, item.link, summary)
+              newSummaries.push({
+                title: cleanTitle,
+                link: item.link,
+                summary,
+              })
+              console.log('Summary added for:', cleanTitle)
+              processedArticles++
+            } else {
+              console.log('Empty summary received for:', cleanTitle)
+            }
+          } else {
+            console.log('Unexpected response structure from OpenAI API: missing message')
           }
-        ],
-        max_tokens: MAX_TOKENS,
-        temperature: 0.7,
-      })
-
-      const summary = response.choices[0].message.content?.trim()
-
-      if (summary) {
-        await addSummary(cleanTitle, item.link, summary)
-        newSummaries.push({
-          title: cleanTitle,
-          link: item.link,
-          summary,
-        })
-        console.log('Summary added for:', cleanTitle)
-        processedArticles++
+        } else {
+          console.log('Unexpected response structure from OpenAI API: missing choices')
+        }
+      } catch (error) {
+        console.error(`Error processing item ${item.title}:`, error)
+        // Continue with the next item instead of breaking the entire feed processing
       }
     }
 
