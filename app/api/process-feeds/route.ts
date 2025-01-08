@@ -82,7 +82,7 @@ function cleanHtmlContent(content: string): string {
   return $.text().trim()
 }
 
-async function processFeed(feed: { url: string }, aiPrompt: string, maxArticles: number): Promise<any[]> {
+async function processFeed(feed: { url: string }, aiPrompt: string, maxArticles: number): Promise<Array<{ title: string; link: string; summary: string }>> {
   console.log(`Processing feed: ${feed.url}`)
   try {
     const feedContent = await fetchWithRetry(feed.url)
