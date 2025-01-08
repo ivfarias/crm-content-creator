@@ -19,7 +19,8 @@ const openai = new OpenAI({
 const MAX_TOKENS = 500
 const MAX_RETRIES = 5
 const RETRY_DELAY = 5000 // 5 seconds
-const FETCH_TIMEOUT = 60000 // 60 seconds
+const FETCH_TIMEOUT = 60000 // 60 seconds (1 minute)
+const PROCESSING_TIMEOUT = 120000 // 120 seconds (2 minutes)
 
 async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<string> {
   try {
@@ -37,14 +38,10 @@ async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<strin
         await new Promise(resolve => setTimeout(resolve, RETRY_DELAY))
         return fetchWithRetry(url, retries - 1)
       } else if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
         console.error(`HTTP error ${error.response.status} for ${url}: ${error.response.statusText}`)
       } else if (error.request) {
-        // The request was made but no response was received
         console.error(`No response received for ${url}: ${error.message}`)
       } else {
-        // Something happened in setting up the request that triggered an Error
         console.error(`Error setting up request for ${url}: ${error.message}`)
       }
     }
@@ -111,7 +108,7 @@ async function processFeed(feed: { url: string }, aiPrompt: string, maxArticles:
         continue
       }
 
-      const cleanTitle = cleanHtmlContent(item.title || '')
+      const cleanTitle = cleanHtmlContent(item.title || 'Untitled')
       const cleanContent = cleanHtmlContent(articleContent)
 
       const response = await openai.chat.completions.create({
@@ -132,7 +129,7 @@ Content: ${cleanContent}`
       const summary = response.choices[0].message.content?.trim()
 
       if (summary) {
-        await addSummary(cleanTitle || 'Untitled', item.link, summary)
+        await addSummary(cleanTitle, item.link, summary)
         newSummaries.push({
           title: cleanTitle,
           link: item.link,
@@ -151,23 +148,36 @@ Content: ${cleanContent}`
 }
 
 export async function POST(request: Request) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROCESSING_TIMEOUT);
+
+  let newSummaries: Array<{ title: string; link: string; summary: string }> = [];
+
   try {
     const { maxArticles } = await request.json()
     const feeds = await getRSSFeeds()
     const aiPrompt = await getAIPrompt()
     console.log('Using AI Prompt in feed processing:', aiPrompt)
 
-    const newSummaries = []
-
     for (const feed of feeds) {
       const feedSummaries = await processFeed(feed, aiPrompt, maxArticles)
       newSummaries.push(...feedSummaries)
     }
 
+    clearTimeout(timeoutId);
     return NextResponse.json({ message: 'RSS feeds processed successfully', newSummaries })
-  } catch (error) {
-    console.error('Error processing RSS feeds:', error)
-    return NextResponse.json({ error: 'Failed to process RSS feeds' }, { status: 500 })
+  } catch (error: unknown) {
+    clearTimeout(timeoutId);
+    if (error instanceof Error) {
+      if (error.name === 'AbortError') {
+        console.error('Feed processing timed out');
+        return NextResponse.json({ error: 'Feed processing timed out', partialResults: newSummaries }, { status: 504 })
+      }
+      console.error('Error processing RSS feeds:', error.message)
+      return NextResponse.json({ error: 'Failed to process RSS feeds', message: error.message }, { status: 500 })
+    }
+    console.error('Unknown error processing RSS feeds:', error)
+    return NextResponse.json({ error: 'An unknown error occurred while processing RSS feeds' }, { status: 500 })
   }
 }
 
