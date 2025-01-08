@@ -19,8 +19,8 @@ const openai = new OpenAI({
 const MAX_TOKENS = 500
 const MAX_RETRIES = 5
 const RETRY_DELAY = 5000 // 5 seconds
-const FETCH_TIMEOUT = 60000 // 60 seconds (1 minute)
-const PROCESSING_TIMEOUT = 120000 // 120 seconds (2 minutes)
+const FETCH_TIMEOUT = 120000 // 120 seconds (2 minutes)
+const PROCESSING_TIMEOUT = 240000 // 240 seconds (4 minutes)
 
 async function fetchWithRetry(url: string, retries = MAX_RETRIES): Promise<string> {
   try {
@@ -151,7 +151,7 @@ export async function POST(request: Request) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROCESSING_TIMEOUT);
 
-  let newSummaries: Array<{ title: string; link: string; summary: string }> = [];
+  const newSummaries: Array<{ title: string; link: string; summary: string }> = [];
 
   try {
     const { maxArticles } = await request.json()
