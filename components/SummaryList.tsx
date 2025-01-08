@@ -24,22 +24,22 @@ export default function SummaryList() {
   return (
     <div className="space-y-6">
       {summaries.length === 0 ? (
-        <p className="text-gray-500 text-center">No summaries available.</p>
+        <p className="text-slate-500 text-center">No summaries available.</p>
       ) : (
         <ul className="space-y-8">
           {summaries.map((summary) => (
             <li key={summary.id} className="bg-white shadow overflow-hidden sm:rounded-lg">
               <div className="px-4 py-5 sm:px-6">
-                <h3 className="text-lg leading-6 font-medium text-gray-700">{summary.title}</h3>
-                <p className="mt-1 max-w-2xl text-sm text-gray-500">
-                  <a href={summary.link} target="_blank" rel="noopener noreferrer" className="text-gray-600 hover:text-gray-700">
+                <h3 className="text-lg leading-6 font-medium text-slate-700">{summary.title}</h3>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                  <a href={summary.link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-slate-700">
                     Original Article
                   </a>
                 </p>
               </div>
               <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
                 <div className="sm:px-6 sm:py-5">
-                  <div className="prose prose-sm max-w-none text-gray-700">
+                  <div className="prose prose-sm max-w-none text-slate-700">
                     <ReactMarkdown>{summary.summary}</ReactMarkdown>
                   </div>
                 </div>
